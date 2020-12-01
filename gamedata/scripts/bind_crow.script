@@ -1,14 +1,10 @@
 crow_storage = {}
 crow_counter = 0
 
-local object_binder_update = object_binder.update
-
 function bind(obj)
 	obj:bind_object(crow_binder(obj))
 end
 
---------------------------------------------------------------------------------
--- Class "crow_binder"
 --------------------------------------------------------------------------------
 
 class "crow_binder" (object_binder)
@@ -28,14 +24,14 @@ function crow_binder:reinit()
 	self.st = t
 end
 
+local object_binder_update = object_binder.update
+
 function crow_binder:update(delta)
 	object_binder_update(self, delta)
 	local death_time = self.death_time
-	if death_time ~= nil then
-		if game.get_game_time():diffSec(death_time) >= 1200 then -- 10 * 120 seconds = 1200 game-seconds
-			local sim = _G.sim
-			sim:release(sim:object(self.object:id()), true)
-		end
+	if death_time and game.get_game_time():diffSec(death_time) >= 1200 then -- 10 * 120 seconds = 1200 game-seconds
+		local sim = _G.sim
+		sim:release(sim:object(self.object:id()), true)
 	end
 end
 
@@ -44,17 +40,15 @@ function crow_binder:net_spawn(sobject)
 		return false
 	end
 	local sobj = self.object
-	if not sobj:alive() then
+	if sobj:alive() then
+		db.add_obj(sobj)
+		crow_storage[sobj:id()] = sobj
+		crow_counter = crow_counter + 1
+		sobj:set_callback(callback.death, self.death_callback, self)
+	else
 		local sim = _G.sim
 		sim:release(sim:object(sobj:id()), true)
-		return true
 	end
-	db.add_obj(sobj)
---	crow_storage[#crow_storage + 1] = sobj
-	crow_storage[sobj:id()] = sobj
-	crow_counter = crow_counter + 1
-	sobj:set_callback(callback.death, self.death_callback, self)
---	dbglog("net_spawn() called on crow: number of crows = "..crow_counter)
 	return true
 end
 
@@ -68,15 +62,6 @@ end
 function crow_binder:death_callback(victim, who)
 	self.death_time = game.get_game_time()
 	local sobj_id = self.object:id()
---[[
-	for k, v in pairs (crow_storage) do
-		if v:id() == sobj_id then
-			table.remove(crow_storage, k)
-			crow_counter = crow_counter - 1
-			break
-		end
-	end
-]]
 	if crow_storage[sobj_id] ~= nil then
 		crow_storage[sobj_id] = nil
 		crow_counter = crow_counter - 1
